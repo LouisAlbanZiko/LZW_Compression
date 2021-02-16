@@ -9,8 +9,11 @@ int main(int argc, char **argv)
 {
 	// parse arguments
 	const char *file_name_input = NULL;
-	const char *alphabet_file_name = NULL;
+	const char *file_name_alphabet = NULL;
 	const char *file_name_output = "output.lzw";
+	const char *file_name_dictionary = NULL;
+	const char *file_name_tuples = NULL;
+	uint32_t reverse_input = 0;
 	if (argc > 1)
 	{
 		uint32_t args_iterator = 1;
@@ -18,21 +21,36 @@ int main(int argc, char **argv)
 		{
 			if (argv[args_iterator][0] == '-')
 			{
-				if (argv[args_iterator][1] == 'a')
+				if (args_iterator + 1 != argc)
 				{
-					args_iterator++;
-					if (args_iterator < argc)
+					if (argv[args_iterator][1] == 'a')
 					{
-						alphabet_file_name = argv[args_iterator];
+						file_name_alphabet = argv[++args_iterator];
+					}
+					else if (argv[args_iterator][1] == 'o')
+					{
+						file_name_output = argv[++args_iterator];
+					}
+					else if (argv[args_iterator][1] == 'd')
+					{
+						file_name_dictionary = argv[++args_iterator];
+					}
+					else if (argv[args_iterator][1] == 't')
+					{
+						file_name_tuples = argv[++args_iterator];
+					}
+					else if (argv[args_iterator][1] == 'r')
+					{
+						reverse_input = 1;
 					}
 					else
 					{
-						FATAL("Option '%s' passed but no file provided.", argv[args_iterator - 1]);
+						ERROR("Option '%s' not defined.", argv[args_iterator]);
 					}
 				}
 				else
 				{
-					ERROR("Option '%s' not defined.", argv[args_iterator]);
+					FATAL("Option '%s' passed but no file provided.", argv[args_iterator - 1]);
 				}
 			}
 			else if (file_name_input == NULL)
@@ -51,16 +69,38 @@ int main(int argc, char **argv)
 		FATAL("No file provided.");
 	}
 
+	FILE *file_tuples = NULL;
+	if (file_name_tuples != NULL)
+	{
+		file_tuples = fopen(file_name_tuples, "w");
+		if(file_tuples == NULL)
+		{
+			ERROR("Couldn't open tuples file.\n");
+		}
+	}
+
 	// read file
 	char *input_data = NULL;
 	file_read((void *)&input_data, file_name_input);
 	uint32_t input_data_len = strlen(input_data);
 
+	if (reverse_input)
+	{
+		char *temp = malloc(input_data_len + 1);
+		temp[input_data_len] = '\0';
+		for (uint32_t i = 0; i < input_data_len; i++)
+		{
+			temp[i] = input_data[input_data_len - i - 1];
+		}
+		free(input_data);
+		input_data = temp;
+	}
+
 	// define alphabet
 	char *alphabet;
-	if (alphabet_file_name != NULL)
+	if (file_name_alphabet != NULL)
 	{
-		file_read((void *)&alphabet, alphabet_file_name);
+		file_read((void *)&alphabet, file_name_alphabet);
 	}
 	else
 	{
@@ -68,12 +108,6 @@ int main(int argc, char **argv)
 		alphabet = malloc(strlen(default_alphabet_string) + 1);
 		strcpy(alphabet, default_alphabet_string);
 	}
-
-	// print file contents
-	printf("File read:\n%s\n", input_data);
-
-	// print alphabet
-	printf("Alphabet:\n%s\n", alphabet);
 
 	// create dictionary
 	Dictionary dictionary;
@@ -96,13 +130,12 @@ int main(int argc, char **argv)
 	BufferBit_create(&output_codes, 128);
 
 	// compress
-	uint32_t bit_length = log2_uint(dictionary.count_c);
+	uint32_t bit_length = log2_uint(dictionary.count_c - 1);
 	SubString pattern = {.ref = &input_data, .start = 0, .end = 1};
+	uint32_t code_count = 0;
 	uint32_t percent_counter = 0;
 	do
 	{
-		SubString_output("pattern = '", &pattern, "'\n");
-		printf("dictionary.count_c = %d\n", dictionary.count_c);
 		SubString p_c = {.ref = &input_data, .start = pattern.start, .end = pattern.end + 1};
 		uint32_t found_in_dictionary = Dictionary_doesEntryExist(&dictionary, &p_c);
 		if (!found_in_dictionary)
@@ -110,32 +143,44 @@ int main(int argc, char **argv)
 			// add code to output
 			uint32_t code = Dictionary_findIndex(&dictionary, &pattern);
 			BufferBit_insert(&output_codes, code, bit_length);
-			printf("output = %d, bit_length = %d\n", code, bit_length);
+			if (file_tuples != NULL)
+			{
+				for (uint32_t i = pattern.start; i < pattern.end; i++)
+					fprintf(file_tuples, "%c", (*pattern.ref)[i]);
+				fprintf(file_tuples, " -> %d\n", code);
+			}
+			code_count++;
 
 			// add p_c to dictionary
 			Dictionary_insert(&dictionary, &p_c);
-			SubString_output("added to dictionary = '", &p_c, "'\n");
 
 			// increase bit length if necessary
-			bit_length = log2_uint(dictionary.count_c);
+			bit_length = log2_uint(dictionary.count_c - 1);
 
 			// p = c
 			pattern.start = pattern.end;
 		}
 		pattern.end++;
 
-		if((uint32_t)((float)pattern.start / (float)input_data_len * 100.0f) > percent_counter)
+		if ((uint32_t)((float)pattern.start / (float)input_data_len * 100.0f) > percent_counter)
 		{
 			fprintf(stdout, "%d%% done\n", ++percent_counter);
 		}
 	} while ((*pattern.ref)[pattern.start] != '\0');
+
+	if (file_tuples != NULL)
+	{
+		fprintf(file_tuples, "%d tuples were generated.\n", code_count);
+		fclose(file_tuples);
+	}
 
 	// insert ending code
 	BufferBit_insert(&output_codes, 0, bit_length);
 
 	file_write(output_codes.data, sizeof(*(output_codes.data)) * (output_codes.index_uint + 1), file_name_output);
 
-	Dictionary_output(&dictionary, "dictionary_compress.txt");
+	if (file_name_dictionary != NULL)
+		Dictionary_output(&dictionary, file_name_dictionary);
 
 	// cleanup
 	{

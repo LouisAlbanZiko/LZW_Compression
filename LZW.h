@@ -5,22 +5,20 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#define printf(...)
+#define INFO(...)        \
+	//printf("[+] ");      \
+	//printf(__VA_ARGS__); \
+	//printf("\n")
 
-#define INFO(...)   \
-	printf("[+] "); \
-	printf("\n");   \
-	printf(__VA_ARGS__)
-
-#define ERROR(...)  \
-	printf("[-] "); \
-	printf("\n");   \
-	printf(__VA_ARGS__)
+#define ERROR(...)       \
+	//printf("[-] ");      \
+	//printf(__VA_ARGS__); \
+	//printf("\n")
 
 #define FATAL(...)       \
-	printf("[!] ");      \
-	printf(__VA_ARGS__); \
-	printf("\n");        \
+	//printf("[!] ");      \
+	//printf(__VA_ARGS__); \
+	//printf("\n");        \
 	exit(EXIT_FAILURE)
 
 uint32_t log2_uint(uint32_t nr)
@@ -86,14 +84,14 @@ void BufferBit_insert(BufferBit *buffer, uint32_t e, uint32_t bit_length)
 			buffer->data = realloc(buffer->data, buffer->count_m * sizeof(*(buffer->data)));
 		}
 	}
-	printf("Bits inserted '");
+	//printf("Bits inserted '");
 	for (uint32_t i = bit_length; i > 0; i--)
 	{
 		uint32_t bit = (e >> (i - 1)) & 1;
-		printf("%d", bit);
+		//printf("%d", bit);
 		BufferBit_insertBit(buffer, bit);
 	}
-	printf("'\n");
+	//printf("'\n");
 }
 
 // reading
@@ -134,10 +132,10 @@ typedef struct
 
 void SubString_output(const char *before, const SubString *string, const char *after)
 {
-	printf(before);
-	for (const char *start = (*string->ref) + string->start; start < (*string->ref) + string->end; start++)
-		printf("%c", *start);
-	printf(after);
+	//printf(before);
+	//for (const char *start = (*string->ref) + string->start; start < (*string->ref) + string->end; start++)
+		//printf("%c", *start);
+	//printf(after);
 }
 
 uint32_t SubString_length(const SubString *string)
@@ -183,14 +181,14 @@ void OutputBuffer_create(OutputBuffer *buffer)
 	buffer->data = malloc(sizeof(*(buffer->data)) * buffer->count_m);
 }
 
-void OutputBuffer_insert_Substring(OutputBuffer *buffer, SubString *string)
+void OutputBuffer_insert_Substring(OutputBuffer *buffer, const SubString *string)
 {
-	if(buffer->count_c + string->end - string->start >= buffer->count_m)
+	if (buffer->count_c + SubString_length(string) >= buffer->count_m)
 	{
 		buffer->count_m *= 2;
 		buffer->data = realloc(buffer->data, sizeof(*buffer->data) * buffer->count_m);
 	}
-	for(uint32_t i = string->start; i < string->end; i++)
+	for (uint32_t i = string->start; i < string->end; i++)
 	{
 		buffer->data[buffer->count_c++] = (*string->ref)[i];
 	}
@@ -198,7 +196,7 @@ void OutputBuffer_insert_Substring(OutputBuffer *buffer, SubString *string)
 
 void OutputBuffer_insert_char(OutputBuffer *buffer, char c)
 {
-	if(buffer->count_c + 1 == buffer->count_m)
+	if (buffer->count_c + 1 >= buffer->count_m)
 	{
 		buffer->count_m *= 2;
 		buffer->data = realloc(buffer->data, sizeof(*buffer->data) * buffer->count_m);
@@ -242,9 +240,9 @@ void Dictionary_insert(Dictionary *dictionary, const SubString *e)
 void Dictionary_output(Dictionary *dictionary, const char *file_path)
 {
 	FILE *file = fopen(file_path, "w");
-	for(uint32_t i = 0; i < dictionary->count_c; i++)
+	for (uint32_t i = 0; i < dictionary->count_c; i++)
 	{
-		for(uint32_t string_index = 0; string_index < SubString_length(&(dictionary->data[i])); string_index++)
+		for (uint32_t string_index = 0; string_index < SubString_length(&(dictionary->data[i])); string_index++)
 			fprintf(file, "%d", (*(dictionary->data[i].ref))[dictionary->data[i].start + string_index]);
 		fprintf(file, "\n");
 	}
@@ -253,9 +251,9 @@ void Dictionary_output(Dictionary *dictionary, const char *file_path)
 
 uint32_t Dictionary_findIndex(Dictionary *dictionary, const SubString *string)
 {
-	for(uint32_t i = 0; i < dictionary->count_c; i++)
+	for (uint32_t i = 0; i < dictionary->count_c; i++)
 	{
-		if(SubString_compare(&dictionary->data[i], string))
+		if (SubString_compare(&dictionary->data[i], string))
 			return i;
 	}
 	return dictionary->count_c;

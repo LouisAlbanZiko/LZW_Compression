@@ -11,6 +11,7 @@ int main(int argc, char **argv)
 	const char *file_name_input = NULL;
 	const char *file_name_alphabet = NULL;
 	const char *file_name_output = "output.txt";
+	const char *file_name_dictionary = NULL;
 	if (argc > 1)
 	{
 		uint32_t args_iterator = 1;
@@ -27,6 +28,10 @@ int main(int argc, char **argv)
 					else if (argv[args_iterator][1] == 'o')
 					{
 						file_name_output = argv[++args_iterator];
+					}
+					else if (argv[args_iterator][1] == 'd')
+					{
+						file_name_dictionary = argv[++args_iterator];
 					}
 					else
 					{
@@ -53,9 +58,6 @@ int main(int argc, char **argv)
 	{
 		FATAL("No file provided.");
 	}
-
-	printf("file_name_input = %s\n", file_name_input);
-	printf("file_name_output = %s\n", file_name_output);
 
 	// read file
 	BufferBit input_data;
@@ -85,17 +87,14 @@ int main(int argc, char **argv)
 
 	// add terminating character to dictionary
 	const char *_null_ref = "\0";
-	dictionary.data[0].ref = &_null_ref;
-	dictionary.data[0].start = 0;
-	dictionary.data[0].end = 1;
-	dictionary.count_c++;
+	SubString _null_string = {&_null_ref, 0, 1};
+	Dictionary_insert(&dictionary, &_null_string);
 
 	// add alphabet to dictionary
-	for (; alphabet[dictionary.count_c - 1] != '\0'; dictionary.count_c++)
+	for (uint32_t i = 0; i < strlen(alphabet); i++)
 	{
-		dictionary.data[dictionary.count_c].ref = &alphabet;
-		dictionary.data[dictionary.count_c].start = dictionary.count_c - 1;
-		dictionary.data[dictionary.count_c].end = dictionary.count_c;
+		SubString temp = {&alphabet, i, i + 1};
+		Dictionary_insert(&dictionary, &temp);
 	}
 
 	// create output buffer
@@ -110,7 +109,7 @@ int main(int argc, char **argv)
 	OutputBuffer pattern_buffer;
 	OutputBuffer_create(&pattern_buffer);
 
-	uint32_t bit_length = log2_uint(dictionary.count_c);
+	uint32_t bit_length = log2_uint(dictionary.count_c - 1);
 
 	uint32_t old = BufferBit_get(&input_data, bit_length), new;
 	OutputBuffer_insert_Substring(&output_buffer, &dictionary.data[old]);
@@ -124,23 +123,21 @@ int main(int argc, char **argv)
 	do
 	{
 		new = BufferBit_get(&input_data, bit_length);
-		printf("old = %d, new = %d, dict_length = %d\n", old, new, dictionary.count_c);
+		printf("old = %d, new = %d, dict_length = %d, bit_length = %d\n", old, new, dictionary.count_c, bit_length);
 
-		if (new < dictionary.count_c)
+		pattern_buffer.count_c = 0;
+		pattern.start = pattern_buffer.count_c;
+		if (new == dictionary.count_c)
 		{
-			pattern_buffer.count_c = 0;
-			pattern.start = pattern_buffer.count_c;
-			OutputBuffer_insert_Substring(&pattern_buffer, &dictionary.data[new]);
-			pattern.end = pattern_buffer.count_c;
+			fprintf(stdout, "new = %d, buffer_index = %d, bit_length = %d\n", new, output_buffer.count_c, bit_length);
+			OutputBuffer_insert_Substring(&pattern_buffer, &dictionary.data[old]);
+			OutputBuffer_insert_char(&pattern_buffer, c);
 		}
 		else
 		{
-			pattern_buffer.count_c = 0;
-			pattern.start = pattern_buffer.count_c;
-			OutputBuffer_insert_Substring(&pattern_buffer, &dictionary.data[old]);
-			OutputBuffer_insert_char(&pattern_buffer, c);
-			pattern.end = pattern_buffer.count_c;
+			OutputBuffer_insert_Substring(&pattern_buffer, &dictionary.data[new]);
 		}
+		pattern.end = pattern_buffer.count_c;
 
 		// output S
 		OutputBuffer_insert_Substring(&output_buffer, &pattern);
@@ -155,7 +152,7 @@ int main(int argc, char **argv)
 
 		Dictionary_insert(&dictionary, &new_entry);
 		SubString_output("added to dictionary = '", &new_entry, "'\n");
-		bit_length = log2_uint(dictionary.count_c == 4096 ? dictionary.count_c : dictionary.count_c + 1);
+		bit_length = log2_uint(dictionary.count_c == 4096 ? 4095 : dictionary.count_c);
 
 		old = new;
 	} while (new != 0);
@@ -163,7 +160,8 @@ int main(int argc, char **argv)
 	printf("output_buffer.count_c = %d\n", output_buffer.count_c);
 	file_write(output_buffer.data, sizeof(*(output_buffer.data)) * (output_buffer.count_c - 1), file_name_output);
 
-	Dictionary_output(&dictionary, "dictionary_decompress.txt");  
+	if (file_name_dictionary != NULL)
+		Dictionary_output(&dictionary, file_name_dictionary);
 
 	// cleanup
 	{
